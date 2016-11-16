@@ -1,0 +1,3 @@
+[submodule "deps/libvips"]
+	path = deps/libvips
+	url = https://github.com/mah0x211/libvips.git
