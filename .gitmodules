@@ -1,3 +1,6 @@
 [submodule "deps/libvips"]
 	path = deps/libvips
 	url = https://github.com/mah0x211/libvips.git
+[submodule "deps/lauxhlib"]
+	path = deps/lauxhlib
+	url = https://github.com/mah0x211/lauxhlib.git
