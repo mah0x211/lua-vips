@@ -40,10 +40,60 @@
 
 #define DEFAULT_QUALITY     85
 
+
 typedef struct {
     VipsImage *img;
     uint8_t q;
 } lvips_t;
+
+
+static int save_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+    const char *pathname = lauxh_checkstring( L, 2 );
+
+    if( vips_jpegsave( v->img, pathname,
+                       // quality factor
+                       "Q", v->q,
+                       // filename of ICC profile to attach
+                       "profile", "none",
+                       // compute optimal Huffman coding tables
+                       "optimize_coding", TRUE,
+                       // progressive jpeg
+                       "interlace", TRUE,
+                       // remove all metadata from image
+                       "strip", TRUE,
+                    //    // disable chroma subsampling
+                    //    "no-subsample", TRUE,
+                       NULL ) == 0 ){
+        lua_pushboolean( L, 1 );
+        return 1;
+    }
+
+    // got error
+    lua_pushboolean( L, 0 );
+    lua_pushstring( L, vips_error_buffer() );
+    vips_error_clear();
+
+    return 2;
+}
+
+
+static int quality_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+    lua_Integer q = lauxh_checkinteger( L, 2 );
+
+    lauxh_argcheck( L, q >= 0 && q <= 100, 2, "0 to 100 expected, got %ld", q );
+
+    // update quality
+    v->q = q;
+
+    // return self
+    lua_settop( L, 1 );
+
+    return 1;
+}
 
 
 static int tostring_lua( lua_State *L )
@@ -133,6 +183,8 @@ LUALIB_API int luaopen_vips( lua_State *L )
         { NULL, NULL }
     };
     struct luaL_Reg methods[] = {
+        { "quality", quality_lua },
+        { "save", save_lua },
         { NULL, NULL }
     };
     struct luaL_Reg *ptr = mmethods;
