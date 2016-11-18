@@ -97,6 +97,17 @@ static int quality_lua( lua_State *L )
 
 
 
+static int getres_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+
+    lua_pushinteger( L, vips_image_get_xres( v->img ) );
+    lua_pushinteger( L, vips_image_get_yres( v->img ) );
+
+    return 2;
+}
+
+
 static int getsize_lua( lua_State *L )
 {
     lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
@@ -196,6 +207,7 @@ LUALIB_API int luaopen_vips( lua_State *L )
     };
     struct luaL_Reg methods[] = {
         { "getsize", getsize_lua },
+        { "getres", getres_lua },
         { "quality", quality_lua },
         { "save", save_lua },
         { NULL, NULL }
