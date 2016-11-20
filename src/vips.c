@@ -28,6 +28,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <errno.h>
 #include <lua.h>
 #include <lauxlib.h>
@@ -38,11 +39,13 @@
 #define MODULE_MT           "vips"
 #define MODULE_IMAGE_MT     "vips.image"
 
+#define DEFAULT_SCALE       1
 #define DEFAULT_QUALITY     85
 
 
 typedef struct {
     VipsImage *img;
+    double scale;
     uint8_t q;
 } lvips_t;
 
@@ -51,6 +54,17 @@ static int save_lua( lua_State *L )
 {
     lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
     const char *pathname = lauxh_checkstring( L, 2 );
+
+    if( v->scale != DEFAULT_SCALE )
+    {
+        VipsImage *tmp = NULL;
+
+        if( vips_resize( v->img, &tmp, v->scale, NULL ) ){
+            goto FAILURE;
+        }
+        VIPS_UNREF( v->img );
+        v->img = tmp;
+    }
 
     if( vips_jpegsave( v->img, pathname,
                        // quality factor
@@ -70,6 +84,7 @@ static int save_lua( lua_State *L )
         return 1;
     }
 
+FAILURE:
     // got error
     lua_pushboolean( L, 0 );
     lua_pushstring( L, vips_error_buffer() );
@@ -95,6 +110,37 @@ static int quality_lua( lua_State *L )
     return 1;
 }
 
+
+static int resize_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+    lua_Integer w = lauxh_optinteger( L, 2, 0 );
+    lua_Integer h = lauxh_optinteger( L, 3, 0 );
+    int ow = vips_image_get_width( v->img );
+    int oh = vips_image_get_height( v->img );
+
+    lauxh_argcheck( L, w >= 0, 2, "unsigned integer expected, got %ld", w );
+    lauxh_argcheck( L, h >= 0, 3, "unsigned integer expected, got %ld", h );
+
+    // select which based on
+    if( w && h ){
+        v->scale = fmax( ( (double)w / (double)ow ),
+                         ( (double)h / (double)oh ) );
+    }
+    // based on width
+    else if( w ){
+        v->scale = (double)w / (double)ow;
+    }
+    // based on height
+    else if( h ){
+        v->scale = (double)h / (double)oh;
+    }
+
+    // return self
+    lua_settop( L, 1 );
+
+    return 1;
+}
 
 
 static int getres_lua( lua_State *L )
@@ -154,6 +200,7 @@ static int newfromfile_lua( lua_State *L )
                                        VIPS_ACCESS_SEQUENTIAL, NULL );
     if( v->img ){
         lauxh_setmetatable( L, MODULE_IMAGE_MT );
+        v->scale = DEFAULT_SCALE;
         v->q = DEFAULT_QUALITY;
         return 1;
     }
@@ -209,6 +256,7 @@ LUALIB_API int luaopen_vips( lua_State *L )
         { "getsize", getsize_lua },
         { "getres", getres_lua },
         { "quality", quality_lua },
+        { "resize", resize_lua },
         { "save", save_lua },
         { NULL, NULL }
     };
