@@ -176,6 +176,19 @@ static int getquality_lua( lua_State *L )
 }
 
 
+static int close_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+
+    if( v->img ){
+        VIPS_UNREF( v->img );
+        v->img = NULL;
+    }
+
+    return 0;
+}
+
+
 static int tostring_lua( lua_State *L )
 {
     lua_pushfstring( L, MODULE_MT ": %p", lua_touserdata( L, 1 ) );
@@ -239,6 +252,9 @@ static int init_module( lua_State *L )
         return luaL_error( L, "failed to VIPS_INIT()" );
     }
 
+    // disable vips internal cache
+    vips_cache_set_max( 0 );
+
     // create metatable
     luaL_newmetatable( L, MODULE_MT );
     lauxh_pushfn2tbl( L, "__gc", gc_module );
@@ -270,6 +286,7 @@ LUALIB_API int luaopen_vips( lua_State *L )
         { "quality", quality_lua },
         { "resize", resize_lua },
         { "save", save_lua },
+        { "close", close_lua },
         { NULL, NULL }
     };
     struct luaL_Reg *ptr = mmethods;
