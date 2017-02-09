@@ -51,10 +51,11 @@ typedef struct {
 } lvips_t;
 
 
-static int save_lua( lua_State *L )
+static int jpegsave_lua( lua_State *L )
 {
     lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
     const char *pathname = lauxh_checkstring( L, 2 );
+    int drop = lauxh_optboolean( L, 3, 0 );
 
     if( v->scale != DEFAULT_SCALE )
     {
@@ -81,6 +82,57 @@ static int save_lua( lua_State *L )
                     //    // disable chroma subsampling
                     //    "no-subsample", TRUE,
                        NULL ) == 0 ){
+        if( drop ){
+            VIPS_UNREF( v->img );
+            v->img = NULL;
+        }
+
+        lua_pushboolean( L, 1 );
+        return 1;
+    }
+
+FAILURE:
+    // got error
+    lua_pushboolean( L, 0 );
+    lua_pushstring( L, vips_error_buffer() );
+    vips_error_clear();
+
+    return 2;
+}
+
+
+static int pngsave_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+    const char *pathname = lauxh_checkstring( L, 2 );
+    int drop = lauxh_optboolean( L, 3, 0 );
+
+    if( v->scale != DEFAULT_SCALE )
+    {
+        VipsImage *tmp = NULL;
+
+        if( vips_resize( v->img, &tmp, v->scale, NULL ) ){
+            goto FAILURE;
+        }
+        VIPS_UNREF( v->img );
+        v->img = tmp;
+    }
+
+    if( vips_jpegsave( v->img, pathname,
+                       // filename of ICC profile to attach
+                       "profile", "none",
+                       // progressive png
+                       "interlace", TRUE,
+                       // remove all metadata from image
+                       "strip", TRUE,
+                    //    // disable chroma subsampling
+                    //    "no-subsample", TRUE,
+                       NULL ) == 0 ){
+        if( drop ){
+            VIPS_UNREF( v->img );
+            v->img = NULL;
+        }
+
         lua_pushboolean( L, 1 );
         return 1;
     }
@@ -176,6 +228,19 @@ static int getquality_lua( lua_State *L )
 }
 
 
+static int close_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+
+    if( v->img ){
+        VIPS_UNREF( v->img );
+        v->img = NULL;
+    }
+
+    return 0;
+}
+
+
 static int tostring_lua( lua_State *L )
 {
     lua_pushfstring( L, MODULE_MT ": %p", lua_touserdata( L, 1 ) );
@@ -239,6 +304,9 @@ static int init_module( lua_State *L )
         return luaL_error( L, "failed to VIPS_INIT()" );
     }
 
+    // disable vips internal cache
+    vips_cache_set_max( 0 );
+
     // create metatable
     luaL_newmetatable( L, MODULE_MT );
     lauxh_pushfn2tbl( L, "__gc", gc_module );
@@ -269,7 +337,9 @@ LUALIB_API int luaopen_vips( lua_State *L )
         { "getres", getres_lua },
         { "quality", quality_lua },
         { "resize", resize_lua },
-        { "save", save_lua },
+        { "jpegsave", jpegsave_lua },
+        { "pngsave", pngsave_lua },
+        { "close", close_lua },
         { NULL, NULL }
     };
     struct luaL_Reg *ptr = mmethods;
