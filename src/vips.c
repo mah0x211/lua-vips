@@ -81,6 +81,53 @@ static int save_lua( lua_State *L )
                     //    // disable chroma subsampling
                     //    "no-subsample", TRUE,
                        NULL ) == 0 ){
+
+        lua_pushboolean( L, 1 );
+        return 1;
+    }
+
+FAILURE:
+    // got error
+    lua_pushboolean( L, 0 );
+    lua_pushstring( L, vips_error_buffer() );
+    vips_error_clear();
+
+    return 2;
+}
+
+
+static int pngsave_lua( lua_State *L )
+{
+    lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
+    const char *pathname = lauxh_checkstring( L, 2 );
+    int drop = lauxh_optboolean( L, 3, 0 );
+
+    if( v->scale != DEFAULT_SCALE )
+    {
+        VipsImage *tmp = NULL;
+
+        if( vips_resize( v->img, &tmp, v->scale, NULL ) ){
+            goto FAILURE;
+        }
+        VIPS_UNREF( v->img );
+        v->img = tmp;
+    }
+
+    if( vips_jpegsave( v->img, pathname,
+                       // filename of ICC profile to attach
+                       "profile", "none",
+                       // progressive png
+                       "interlace", TRUE,
+                       // remove all metadata from image
+                       "strip", TRUE,
+                    //    // disable chroma subsampling
+                    //    "no-subsample", TRUE,
+                       NULL ) == 0 ){
+        if( drop ){
+            VIPS_UNREF( v->img );
+            v->img = NULL;
+        }
+
         lua_pushboolean( L, 1 );
         return 1;
     }
@@ -286,6 +333,7 @@ LUALIB_API int luaopen_vips( lua_State *L )
         { "quality", quality_lua },
         { "resize", resize_lua },
         { "save", save_lua },
+        { "pngsave", pngsave_lua },
         { "close", close_lua },
         { NULL, NULL }
     };
