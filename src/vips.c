@@ -51,10 +51,11 @@ typedef struct {
 } lvips_t;
 
 
-static int save_lua( lua_State *L )
+static int jpegsave_lua( lua_State *L )
 {
     lvips_t *v = luaL_checkudata( L, 1, MODULE_IMAGE_MT );
     const char *pathname = lauxh_checkstring( L, 2 );
+    int drop = lauxh_optboolean( L, 3, 0 );
 
     if( v->scale != DEFAULT_SCALE )
     {
@@ -81,6 +82,10 @@ static int save_lua( lua_State *L )
                     //    // disable chroma subsampling
                     //    "no-subsample", TRUE,
                        NULL ) == 0 ){
+        if( drop ){
+            VIPS_UNREF( v->img );
+            v->img = NULL;
+        }
 
         lua_pushboolean( L, 1 );
         return 1;
@@ -332,7 +337,7 @@ LUALIB_API int luaopen_vips( lua_State *L )
         { "getres", getres_lua },
         { "quality", quality_lua },
         { "resize", resize_lua },
-        { "save", save_lua },
+        { "jpegsave", jpegsave_lua },
         { "pngsave", pngsave_lua },
         { "close", close_lua },
         { NULL, NULL }
